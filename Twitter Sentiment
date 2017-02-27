@@ -1,0 +1,751 @@
+
+Twitter Sentiment Analysis
+Here, we apply Sentiment Analysis to Tweets. The Data will be collected from Twitter pages of the non-profit organizations and will be stored in a list. Let's use the natural language processing toolkit. It is very useful in language processing or text analytics.
+In [1]:
+from nltk.classify import NaiveBayesClassifier
+Since we want to classify a text into sentiments, the Naive Bayes Classifier will be used. The reasons for choosing this being:
+Classifier takes less time to build and compute
+Has efficient performance with multi-class classification.
+Does not need a lot of training data
+Less likely to overfit with smaller sample size
+Works best with independent attributes but has no problem with non-independent attributes.
+Importing other relevant libraries from NLTK.
+In [2]:
+from nltk.corpus import subjectivity #From the NLTK corpus we will import subjectivity to classify a tweet as subjective/objective.
+from nltk.sentiment import SentimentAnalyzer #SentimentAnalyzer Library to perform the library
+from nltk.sentiment.util import *
+from nltk.sentiment.vader import SentimentIntensityAnalyzer #Sentiment and Intensity Analyzer will perform our required analysis
+Preparing & Exploring the Data
+The NLTK corpus has 10,000 instances. So, we will split it into two, one with subjective instances and other with objective instances. (subj_docs, obj_docs)
+In [3]:
+n_instances = 10000
+subj_docs = [(sent, 'subj') for sent in subjectivity.sents(categories='subj')[:n_instances]]
+obj_docs = [(sent, 'obj') for sent in subjectivity.sents(categories='obj')[:n_instances]]
+len(subj_docs), len(obj_docs)
+Out[3]:
+(5000, 5000)
+Let's explore the above created tuples (subj_docs, obj_docs) individually
+In [4]:
+obj_docs[1] #This will show that the element is an objective sentence
+Out[4]:
+([u'emerging',
+  u'from',
+  u'the',
+  u'human',
+  u'psyche',
+  u'and',
+  u'showing',
+  u'characteristics',
+  u'of',
+  u'abstract',
+  u'expressionism',
+  u',',
+  u'minimalism',
+  u'and',
+  u'russian',
+  u'constructivism',
+  u',',
+  u'graffiti',
+  u'removal',
+  u'has',
+  u'secured',
+  u'its',
+  u'place',
+  u'in',
+  u'the',
+  u'history',
+  u'of',
+  u'modern',
+  u'art',
+  u'while',
+  u'being',
+  u'created',
+  u'by',
+  u'artists',
+  u'who',
+  u'are',
+  u'unconscious',
+  u'of',
+  u'their',
+  u'artistic',
+  u'achievements',
+  u'.'],
+ 'obj')
+In [5]:
+subj_docs[1] #Exploring the contents of an element of the subj_docs list
+#This will show it is a subjective sentence
+Out[5]:
+([u'color',
+  u',',
+  u'musical',
+  u'bounce',
+  u'and',
+  u'warm',
+  u'seas',
+  u'lapping',
+  u'on',
+  u'island',
+  u'shores',
+  u'.',
+  u'and',
+  u'just',
+  u'enough',
+  u'science',
+  u'to',
+  u'send',
+  u'you',
+  u'home',
+  u'thinking',
+  u'.'],
+ 'subj')
+Data Modeling
+We will build a training and testing model for the subjective and objective documents.Standard train and test split is 80:20. We will first build a training and test tuple and at a later stage apply Sentiment Analyzer method to it during the stage when we build the model.
+In [51]:
+train_subj_docs = subj_docs[:160] 
+test_subj_docs = subj_docs[160:200] 
+train_obj_docs = obj_docs[:160]
+test_obj_docs = obj_docs[160:200]
+training_docs = train_subj_docs+train_obj_docs
+testing_docs = test_subj_docs+test_obj_docs
+Now, we will store Sentiment Analyzer method in a variable which we use for all future purposes for calling as required
+In [52]:
+sentim_analyzer = SentimentAnalyzer()
+We will clean this data to get rid of all negative words. Since Naive Bayes works well with independent features, we treat every word as a feature and naive bayes will analyze it separately. With the mark_negation method, we will enable the sentiment_analyzer to append _NEG suffix to words that appear in the scope between a negation in a sentence and a punctuation mark.
+In [112]:
+all_words_neg = sentim_analyzer.all_words([mark_negation(doc,shallow=True) for doc in training_docs]) 
+#all_words returns all words in documents including duplicates.
+
+unigram_feats = sentim_analyzer.unigram_word_feats(all_words_neg, top_n=160, min_freq=4) 
+# We will analyze the sentiment of top 160 words which occur frequently and independently with unigram_word_feats method.
+
+len(unigram_feats)
+Out[112]:
+160
+In [113]:
+sentim_analyzer.add_feat_extractor(extract_unigram_feats, unigrams=unigram_feats) 
+#We want to extract the features of each unigram and apply sentiment analysis to it.
+Building the Naive Bayes Classifier on the trained model
+With the train and test data prepared, we can now start building our model. We will apply the sentiment analysis function to each of these tuples. Since, we want to apply Naive Bayes prediction technique to the training model, we will initialize another variable which will be trained in Naive Bayes. Then the classifier will be built.
+In [114]:
+training_set = sentim_analyzer.apply_features(training_docs)
+trainer = NaiveBayesClassifier.train
+classifier = sentim_analyzer.train(trainer, training_set)
+Training classifier
+Before we test Naive Bayes on our test dataset, we would have to first prepare the test data, in the form like the training data, i.e. with the features of the Sentiment Analyzer applied to it.
+In [115]:
+test_set = sentim_analyzer.apply_features(testing_docs)
+print (nltk.classify.accuracy(classifier,test_set)) #Testing the accuracy of this model
+0.7875
+Let's study this accuracy in detail by evaluating how the Naive Bayes Classifier performed by looking at its Precision,Accuracy and F-measure
+In [116]:
+for key,value in sorted(sentim_analyzer.evaluate(test_set).items()):
+        print('{0}: {1}'.format(key, value))
+        
+Evaluating NaiveBayesClassifier results...
+Accuracy: 0.7875
+F-measure [obj]: 0.784810126582
+F-measure [subj]: 0.79012345679
+Precision [obj]: 0.794871794872
+Precision [subj]: 0.780487804878
+Recall [obj]: 0.775
+Recall [subj]: 0.8
+Preparing New Test Data
+We have seen how our model has been performing on test data. We will now test it on newer test data, which isn't available on the corpus and has been taken from the Twitter Page of the Non-Profit Organization. We first initialize a list which will contain a list of these tweets as given below.
+In [117]:
+sentences = [
+    
+    "disgusting",
+    "Abilities United thanks its all their help and support . ",
+    "Abilities",
+    "United",
+    "thanks",
+    "its",
+    "volunteers",
+    "for",
+    "all",
+    "their",
+    "help",
+    "and",
+    "support"
+    
+]
+In [118]:
+tricky_sentences = [
+   "Abilities United's garden volunteer, Linda, is included in this anniversary story about Gamble Gardens in Palo Alto. http://buff.ly/2d26cTj ",
+    "Abilities United Aquathon results story is highlighted in this issue of #FamilyHopeFoundationDaily The latest Family Hope Foundation Daily! http://paper.li/family_hope/1359469412?edition_id=143195b0-8313-11e6-a3e8-0cc47a0d15fd … Thanks to @SpOlympicsMI @phpeducation @AbilitiesUnited",
+    "#PaloAltoPlayers The Little Mermaid benefits Abilities United.  View our 'Under the Sea' art exhibit in the lobby! http://buff.ly/2cGiPY7 ",
+    "You still have through Sept. 30 to raise #Aquathon donations for services for children & adults with #disabilities!  http://buff.ly/2d8JEmf ",
+    "Check out fun photos of #Aquathon teams &  #SJSharkie! Find your team, your friends & family.  Make a donation too! http://buff.ly/2ddTItH ",
+    "Did you attend Fiesta Educativa? “It’s important because there are many parents who don’t know what to do...”San Jose: Latino families with special needs kids find support at annual conference",
+"A HUGE #ThankYou to @PurpleMusem for hosting Milestones Preschool last week! The children loved seeing some of thei…",
+    "Many THANKS to @PurpleMuseum for hosting our students last week! Milestones Preschool loved the People exhibit and spending time there!",
+    "Congrats to Team Priya's Rhymers, winner of the #Aquathon Spirit Award. Celebrate and help reach our $85,000 goal! http://buff.ly/2dtUh1D ",
+    "Curious about #Aquathon results to date? Award winners, special guests, & $70+K in donations toward our $85K goal. http://buff.ly/2cWU216 ",
+    "Thank you #Aquathon swimmers, donors!  You're at $70K ! Reach $85K goal by 9/30 to benefit people with disabilities! http://buff.ly/2ddRrlq ",
+    "Thanks to swimmers, cheerleaders, donors of the #Aquathon!  You've raised nearly $70K for services for people with #disabilities! #SJSharkie",
+    "Get your tixs for Abilities United #AuthorsLuncheon.  Meet 4 renowned authors & benefit people with disabilities! http://buff.ly/2d4ESs6 ",
+    "Today was the opening of the exhibition 'Transformations: Creativity from the Inside Out' at the #WaltDisneyFamilyM…",
+    "#Aquathon fundraising thermometer is raising!   See you all 'in the swim' tomorrow! http://buff.ly/2cts5uG ",
+    "Aquathon swimmers/attendees!  Everything you need to know for Sat. Sept. 17 is the website! http://buff.ly/2cYnk1l ",
+    "9/15: early registration price ends: #AuthorsLuncheon! Meet #MarkKurlansky, #FrancineProse, #DanSantat, #MariaSemple http://buff.ly/2cIg3kk ",
+    "Ready to dive in to  #Aquathon Sat. Sept 17?  You've raised over $50k toward our $85K goal! http://buff.ly/2d0nEN8 ",
+    "#Aquathon, competition for #iPad is heating up!  You've raised 50+% of $85K goal!  http://buff.ly/2cnle5O ",
+    "Would your child benefit from a social skills group? Spots available in our 3-5 and 5-8 year old groups.",
+    "9/15: early registration price ends: #AuthorsLuncheon! Meet #MarkKurlansky, #FrancineProse,#DanSantat, #MariaSemple http://buff.ly/2cIg3kk ",
+    "4 more days until #Aquathon! Great job everyone! You've raised 50% of our $85k goal already!  Go for the iPad! http://buff.ly/2cGlSxd ",
+    "#PaloAlto Community Health Fair attendees enjoyed Abilities United art activity & learned how our services can benefit them & the community.",
+    "#Aquathon is Sat. Sept 17!  20+ swim teams compete & already raised $35K toward $85K goal! Go for the gold teams!  http://buff.ly/2cTDGXY ",
+    "Abilities United remembers and honors those individuals and who lost their lives on September 11, 2001.",
+    "Visit Abilities United table at Palo Alto Community Health Fair Sat. Sept. 10, 10 am - 2 pm, Mitchell Park.  http://buff.ly/2cwjoBC ",
+    "Abilities United will benefit from #PaloAltoPlayers #Disney's 'The LIttle Mermaid'!  Use code MERMAIDAU for $10 off  http://buff.ly/2c1SrJ7 ",
+    "Thanks to #Aquathon sponsors, $5k Silver #DematteiConstruction & Laurie T. Jarrett; $2,500 Bronze #KaiserPermanente http://buff.ly/2bYpPhe ",
+    "A good time was had by all who attended the inaugural Stanford Football “Special Needs Family Appreciation Night”",
+    "You've reached 33% of our $85K #Aquathon goal for people with #developmentaldisabilities! http://buff.ly/2c7gAw8 ",
+    "Volunteers & participants hard at work painting center pieces for Authors Luncheon. Win one  Oct. 29! Buy tix now! http://buff.ly/2bG5aky ",
+    "Thank you #Aquathon lane sponsors; Captain Kirk’s San Francisco Sailing #MarketRiders, #Sims Metal Management http://buff.ly/2bWkVmL ",
+    "Special thanks to #MagicDanceArts for volunteering at the Abilities United Summerfest! Everyone had a great time! http://buff.ly/2bS0hEn ",
+    "You're invited to Abilities United #AuthorsLuncheon! See #MarkKurlansky, #FrancineProse,  #DanSantat, #MariaSemple http://buff.ly/2byZpSW ",
+    "Well written blog about Abilities United by #SerenoGroup Palo Alto realtor #HadarGuibara.   #1%forGood Thank you! Learn more about the inspiring organization @AbilitiesUnited in my latest blog post, and join us in supporting them!",
+    "#Aquathon, only 3 weeks away! Read honorary swimmer Maritza's story, to see the difference you make in her life. http://buff.ly/2bMdOsA ",
+    "Thank you to #nationalcharityleague Palo Alto Stanford Hills mothers/daughters for making amazing progress painting!",
+    "Mothers & daughters from #nationalcharityleague Stanford Hills Chapter hard at work ... Great group effort!",
+    "#nationalcharityleague daughters & mothers ready for fun, productive day of painting! Thanks for your time, talent!",
+    "Thanks Abilities United #Aquathon (Sept. 17) sponsors, form your swim teams now; raise $ for people w/ #disabilities http://buff.ly/2ceKuQG ",
+    "Outdoors enthusiast embarks on 10-day journey, 300 mile journey in his wheelchair to advocate for accessible trails.",
+    "#MariaSemple, an author at #AuthorsLuncheon, Oct. 29,  #3 on 'Incredible New Books...' list! http://buff.ly/2bJ45GH  http://buff.ly/2bJ4bhB"
+    "Surprises always arrive at #AbilitiesUnited. Little birdie came for a visit, cooperated as it was escorted outside.",
+    "10 Things for your child to know before going back to school http://buff.ly/2beHbTZ ",
+    "Parents make their 13-month-old a home-made wheelchair. Watch her get around! Paralyzed Edmonton toddler a whiz in homemade wheelchair",
+    "most of us will move in & out of disability in our lifetimes through illness, injury or process of aging.",
+    "Abilities United raised $2+ million FY15/16 for services for people w/developmental disabilities. Thanks to donors!",
+    "Participants & co-workers celebrate Rachelle's 14+ years Abilities United and wish her well! http://buff.ly/2bDRAuC ",
+    "Preschoolers sing: I'm a little fish..When I swim past my friends, I hear them say. Stop your swimming, come & play! http://buff.ly/2brP9Ob ",
+    "Looking for a fun activity for your kids? Visit #ChildrensDiscoveryMusuem #SanJose, enjoy 'People' art exhibit",
+    "Join 15 swim teams already registered for Abilities United Aquathon!  You'll have a fun, energetic day & do good! http://buff.ly/2bnYmTl ",
+ "#ThankfulThursday shout out to #KaiserPermanente, our $2,500 Bronze Sponsor of the  Abilities United Aquathon 2016!  http://buff.ly/2bMbtCT ",
+    "'Forget the gold medal: Why these runners are true Olympic champions' http://buff.ly/2blnZ7p   Spirit of #Aquathon! http://buff.ly/2blohv3 ",
+    "Making flower pots for 25th anniversary Authors Luncheon. Buy your ticket today; win one of these centerpieces! http://buff.ly/2boMaoR ",
+    "'Teaching CA students about the struggles & victories of people with disabilities'? Hear audio on #KALW radio",
+    "Checked out out new Cover photo! #AbilitiesUnited #Support #CheckitOut",
+    "Thank you to everyone at the #SerenoGroup for selecting Abilities United as the beneficiary of 1% for Good program!",
+    "We're proud & thankful #DeMattei Construction, Inc http://buff.ly/2aXJHh3   returns as a 'silver' sponsor at #AbilitiesUnited #Aquathon!",
+    "Join Abilities United #Aquathon,  practice your crawl, breaststroke, butterfly, backstroke http://buff.ly/2b95o0k ",
+    "Artists Ian Douglas teaching an art session at the Children's Discovery Museum San Jose today, Aug. 14 11 am - 4 pm.",
+    "185 children (3 to 14 years old) learned  to swim at Abilities United Water Safety program  #HooverPool #RedwoodCity",
+    "Abilities United #AuthorsLuncheon!  Authors #Mark Kurlansky, #FrancineProse, #DanSantat, #MariaSemple! Buy tix today http://buff.ly/2bnCCYu ",
+    "Moving for Me motor development group for children who are not yet walking. $125 for 5 week series! Starts 8/31!",
+    "Buying or selling a house? Benefit Abilities United; use #SerenoGroup of #PaloAlto realtors! http://buff.ly/2aOMoHy ",
+    "Abilities United  fiscal year ended June 30.  Read a summary of our service, fundraising and volunteer results.",
+    "Join Abilities United for BBQ, face painting, crafts fair, Wed, Aug 10, 10am - 4pm! 3864 Middlefield Rd in Palo Alto",
+    "Abilities United exhibit 'People' which showcases original works of #art by participants of our art program at #CDM.",
+    "Productive day today; three volunteers working on social media, database, & volunteers waiting to be interviewed! http://buff.ly/2b0V6O5 ",
+    "#WildBoy at the #DragonTheatre in #RedwoodCity is about a family trying to keep their son with #autism at home.",
+    "Can't get to #Rio for #Olympics2016 swim race? You CAN make it to the Aquathon, Hoover Pool, Redwood City, Sept. 17. http://tinyurl.com/jg3z56w ",
+    "We're honored the #SerenoGroup of #PaloAlto  selected Abilities United to be the recipients of their '1% for Good'!",
+    "Thank you to the San Mateo couple who donated our new bike rack!  This keeps sidewalks clear & accessible!",
+    "How does your company do when considering these 6 Benchmarks of On-the-job Inclusion of people with disabilities?",
+    "Thank you President Obama & Hillary Clinton for including people with disabilities in your DNC speeches!   Inclusion for all abilities!",
+    "Check out our new responsive, modern, easy to use NEW website! http://www.abilitiesunited.org/   Tell us what you think!",
+    "Hillsborough, CA students made this page about their volunteer day at Abilities United to encourage volunteering! http://www.sharethejoy.org/abilities-united …",
+    "18 new emojis depict a range of abilities; people in wheelchairs, guide dogs, a variety of activities",
+    "Abilities United flag remains at half staff for police killed in Dallas & now Baton Rouge.  We're united with all!",
+    "New movie,'Life, Animated'? Owen Suskind, who has autism, figure out how to navigate the world using Disney cartoons",
+    "Abilities United in JCC story: Moon River & Me: Therapeutic Attributes of Water  http://www.livefullyblog.org/health-and-fitness/moon-river-and-me-the-therapeutic-attributes-of-water/ …",
+    "We join the world in mourning the loss of innocent citizens of the world.  Abilities United stands with France.",
+    "Once again Abilities United stands united with all USA citizens as well  as Dallas, TX to mourn our shared loss. RIP",
+    "Thanks to our board member, we attended the Women of Color conference on #Yahoo campus. http://www.abilitiesunited.org/What-we-do ",
+    "All of us at Abilities United wish everyone a very happy and festive Independence Day!  Original painting by John!"
+    
+]
+In [119]:
+sentences.extend(tricky_sentences) #Extending our sentences list to add a few more
+sid = SentimentIntensityAnalyzer() #From the Vader Library, we will perform both sentiment and intensity analysis
+for sentence in sentences:
+    print(sentence)
+    ss = sid.polarity_scores(sentence) #For checking the polarity of the tweet in terms of how compound/non-compound it is
+    for k in sorted(ss):
+        print '({0}: {1})'.format(k, ss[k])         
+disgusting
+(compound: -0.5267)
+(neg: 1.0)
+(neu: 0.0)
+(pos: 0.0)
+Abilities United thanks its all their help and support . 
+(compound: 0.9022)
+(neg: 0.0)
+(neu: 0.234)
+(pos: 0.766)
+Abilities
+(compound: 0.25)
+(neg: 0.0)
+(neu: 0.0)
+(pos: 1.0)
+United
+(compound: 0.4215)
+(neg: 0.0)
+(neu: 0.0)
+(pos: 1.0)
+thanks
+(compound: 0.4404)
+(neg: 0.0)
+(neu: 0.0)
+(pos: 1.0)
+its
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+volunteers
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+for
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+all
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+their
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+help
+(compound: 0.4019)
+(neg: 0.0)
+(neu: 0.0)
+(pos: 1.0)
+and
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+support
+(compound: 0.4019)
+(neg: 0.0)
+(neu: 0.0)
+(pos: 1.0)
+Abilities United's garden volunteer, Linda, is included in this anniversary story about Gamble Gardens in Palo Alto. http://buff.ly/2d26cTj 
+(compound: 0.25)
+(neg: 0.0)
+(neu: 0.895)
+(pos: 0.105)
+Abilities United Aquathon results story is highlighted in this issue of #FamilyHopeFoundationDaily The latest Family Hope Foundation Daily! http://paper.li/family_hope/1359469412?edition_id=143195b0-8313-11e6-a3e8-0cc47a0d15fd … Thanks to @SpOlympicsMI @phpeducation @AbilitiesUnited
+(compound: 0.8718)
+(neg: 0.0)
+(neu: 0.658)
+(pos: 0.342)
+#PaloAltoPlayers The Little Mermaid benefits Abilities United.  View our 'Under the Sea' art exhibit in the lobby! http://buff.ly/2cGiPY7 
+(compound: 0.7391)
+(neg: 0.0)
+(neu: 0.629)
+(pos: 0.371)
+You still have through Sept. 30 to raise #Aquathon donations for services for children & adults with #disabilities!  http://buff.ly/2d8JEmf 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Check out fun photos of #Aquathon teams &  #SJSharkie! Find your team, your friends & family.  Make a donation too! http://buff.ly/2ddTItH 
+(compound: 0.7896)
+(neg: 0.0)
+(neu: 0.696)
+(pos: 0.304)
+Did you attend Fiesta Educativa? “It’s important because there are many parents who don’t know what to do...”San Jose: Latino families with special needs kids find support at annual conference
+(compound: 0.8519)
+(neg: 0.0)
+(neu: 0.716)
+(pos: 0.284)
+A HUGE #ThankYou to @PurpleMusem for hosting Milestones Preschool last week! The children loved seeing some of thei…
+(compound: 0.8034)
+(neg: 0.0)
+(neu: 0.675)
+(pos: 0.325)
+Many THANKS to @PurpleMuseum for hosting our students last week! Milestones Preschool loved the People exhibit and spending time there!
+(compound: 0.8449)
+(neg: 0.0)
+(neu: 0.689)
+(pos: 0.311)
+Congrats to Team Priya's Rhymers, winner of the #Aquathon Spirit Award. Celebrate and help reach our $85,000 goal! http://buff.ly/2dtUh1D 
+(compound: 0.9595)
+(neg: 0.0)
+(neu: 0.373)
+(pos: 0.627)
+Curious about #Aquathon results to date? Award winners, special guests, & $70+K in donations toward our $85K goal. http://buff.ly/2cWU216 
+(compound: 0.891)
+(neg: 0.0)
+(neu: 0.547)
+(pos: 0.453)
+Thank you #Aquathon swimmers, donors!  You're at $70K ! Reach $85K goal by 9/30 to benefit people with disabilities! http://buff.ly/2ddRrlq 
+(compound: 0.7562)
+(neg: 0.0)
+(neu: 0.682)
+(pos: 0.318)
+Thanks to swimmers, cheerleaders, donors of the #Aquathon!  You've raised nearly $70K for services for people with #disabilities! #SJSharkie
+(compound: 0.6892)
+(neg: 0.0)
+(neu: 0.749)
+(pos: 0.251)
+Get your tixs for Abilities United #AuthorsLuncheon.  Meet 4 renowned authors & benefit people with disabilities! http://buff.ly/2d4ESs6 
+(compound: 0.7959)
+(neg: 0.0)
+(neu: 0.597)
+(pos: 0.403)
+Today was the opening of the exhibition 'Transformations: Creativity from the Inside Out' at the #WaltDisneyFamilyM…
+(compound: 0.3818)
+(neg: 0.0)
+(neu: 0.852)
+(pos: 0.148)
+#Aquathon fundraising thermometer is raising!   See you all 'in the swim' tomorrow! http://buff.ly/2cts5uG 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Aquathon swimmers/attendees!  Everything you need to know for Sat. Sept. 17 is the website! http://buff.ly/2cYnk1l 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+9/15: early registration price ends: #AuthorsLuncheon! Meet #MarkKurlansky, #FrancineProse, #DanSantat, #MariaSemple http://buff.ly/2cIg3kk 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Ready to dive in to  #Aquathon Sat. Sept 17?  You've raised over $50k toward our $85K goal! http://buff.ly/2d0nEN8 
+(compound: 0.4199)
+(neg: 0.0)
+(neu: 0.859)
+(pos: 0.141)
+#Aquathon, competition for #iPad is heating up!  You've raised 50+% of $85K goal!  http://buff.ly/2cnle5O 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Would your child benefit from a social skills group? Spots available in our 3-5 and 5-8 year old groups.
+(compound: 0.4588)
+(neg: 0.0)
+(neu: 0.85)
+(pos: 0.15)
+9/15: early registration price ends: #AuthorsLuncheon! Meet #MarkKurlansky, #FrancineProse,#DanSantat, #MariaSemple http://buff.ly/2cIg3kk 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+4 more days until #Aquathon! Great job everyone! You've raised 50% of our $85k goal already!  Go for the iPad! http://buff.ly/2cGlSxd 
+(compound: 0.7405)
+(neg: 0.0)
+(neu: 0.783)
+(pos: 0.217)
+#PaloAlto Community Health Fair attendees enjoyed Abilities United art activity & learned how our services can benefit them & the community.
+(compound: 0.9081)
+(neg: 0.0)
+(neu: 0.511)
+(pos: 0.489)
+#Aquathon is Sat. Sept 17!  20+ swim teams compete & already raised $35K toward $85K goal! Go for the gold teams!  http://buff.ly/2cTDGXY 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Abilities United remembers and honors those individuals and who lost their lives on September 11, 2001.
+(compound: 0.7003)
+(neg: 0.103)
+(neu: 0.536)
+(pos: 0.362)
+Visit Abilities United table at Palo Alto Community Health Fair Sat. Sept. 10, 10 am - 2 pm, Mitchell Park.  http://buff.ly/2cwjoBC 
+(compound: 0.7269)
+(neg: 0.0)
+(neu: 0.693)
+(pos: 0.307)
+Abilities United will benefit from #PaloAltoPlayers #Disney's 'The LIttle Mermaid'!  Use code MERMAIDAU for $10 off  http://buff.ly/2c1SrJ7 
+(compound: 0.7959)
+(neg: 0.0)
+(neu: 0.634)
+(pos: 0.366)
+Thanks to #Aquathon sponsors, $5k Silver #DematteiConstruction & Laurie T. Jarrett; $2,500 Bronze #KaiserPermanente http://buff.ly/2bYpPhe 
+(compound: 0.4404)
+(neg: 0.0)
+(neu: 0.818)
+(pos: 0.182)
+A good time was had by all who attended the inaugural Stanford Football “Special Needs Family Appreciation Night”
+(compound: 0.7351)
+(neg: 0.0)
+(neu: 0.708)
+(pos: 0.292)
+You've reached 33% of our $85K #Aquathon goal for people with #developmentaldisabilities! http://buff.ly/2c7gAw8 
+(compound: 0.1759)
+(neg: 0.0)
+(neu: 0.876)
+(pos: 0.124)
+Volunteers & participants hard at work painting center pieces for Authors Luncheon. Win one  Oct. 29! Buy tix now! http://buff.ly/2bG5aky 
+(compound: 0.6103)
+(neg: 0.061)
+(neu: 0.746)
+(pos: 0.192)
+Thank you #Aquathon lane sponsors; Captain Kirk’s San Francisco Sailing #MarketRiders, #Sims Metal Management http://buff.ly/2bWkVmL 
+(compound: 0.3612)
+(neg: 0.0)
+(neu: 0.848)
+(pos: 0.152)
+Special thanks to #MagicDanceArts for volunteering at the Abilities United Summerfest! Everyone had a great time! http://buff.ly/2bS0hEn 
+(compound: 0.9335)
+(neg: 0.0)
+(neu: 0.422)
+(pos: 0.578)
+You're invited to Abilities United #AuthorsLuncheon! See #MarkKurlansky, #FrancineProse,  #DanSantat, #MariaSemple http://buff.ly/2byZpSW 
+(compound: 0.6239)
+(neg: 0.0)
+(neu: 0.663)
+(pos: 0.337)
+Well written blog about Abilities United by #SerenoGroup Palo Alto realtor #HadarGuibara.   #1%forGood Thank you! Learn more about the inspiring organization @AbilitiesUnited in my latest blog post, and join us in supporting them!
+(compound: 0.9446)
+(neg: 0.0)
+(neu: 0.589)
+(pos: 0.411)
+#Aquathon, only 3 weeks away! Read honorary swimmer Maritza's story, to see the difference you make in her life. http://buff.ly/2bMdOsA 
+(compound: 0.4003)
+(neg: 0.0)
+(neu: 0.87)
+(pos: 0.13)
+Thank you to #nationalcharityleague Palo Alto Stanford Hills mothers/daughters for making amazing progress painting!
+(compound: 0.8553)
+(neg: 0.0)
+(neu: 0.539)
+(pos: 0.461)
+Mothers & daughters from #nationalcharityleague Stanford Hills Chapter hard at work ... Great group effort!
+(compound: 0.6114)
+(neg: 0.079)
+(neu: 0.674)
+(pos: 0.247)
+#nationalcharityleague daughters & mothers ready for fun, productive day of painting! Thanks for your time, talent!
+(compound: 0.9018)
+(neg: 0.0)
+(neu: 0.477)
+(pos: 0.523)
+Thanks Abilities United #Aquathon (Sept. 17) sponsors, form your swim teams now; raise $ for people w/ #disabilities http://buff.ly/2ceKuQG 
+(compound: 0.7717)
+(neg: 0.0)
+(neu: 0.661)
+(pos: 0.339)
+Outdoors enthusiast embarks on 10-day journey, 300 mile journey in his wheelchair to advocate for accessible trails.
+(compound: 0.3612)
+(neg: 0.0)
+(neu: 0.865)
+(pos: 0.135)
+#MariaSemple, an author at #AuthorsLuncheon, Oct. 29,  #3 on 'Incredible New Books...' list! http://buff.ly/2bJ45GH  http://buff.ly/2bJ4bhBSurprises always arrive at #AbilitiesUnited. Little birdie came for a visit, cooperated as it was escorted outside.
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+10 Things for your child to know before going back to school http://buff.ly/2beHbTZ 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Parents make their 13-month-old a home-made wheelchair. Watch her get around! Paralyzed Edmonton toddler a whiz in homemade wheelchair
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+most of us will move in & out of disability in our lifetimes through illness, injury or process of aging.
+(compound: -0.6705)
+(neg: 0.244)
+(neu: 0.756)
+(pos: 0.0)
+Abilities United raised $2+ million FY15/16 for services for people w/developmental disabilities. Thanks to donors!
+(compound: 0.7901)
+(neg: 0.0)
+(neu: 0.6)
+(pos: 0.4)
+Participants & co-workers celebrate Rachelle's 14+ years Abilities United and wish her well! http://buff.ly/2bDRAuC 
+(compound: 0.9117)
+(neg: 0.0)
+(neu: 0.371)
+(pos: 0.629)
+Preschoolers sing: I'm a little fish..When I swim past my friends, I hear them say. Stop your swimming, come & play! http://buff.ly/2brP9Ob 
+(compound: 0.5562)
+(neg: 0.096)
+(neu: 0.652)
+(pos: 0.252)
+Looking for a fun activity for your kids? Visit #ChildrensDiscoveryMusuem #SanJose, enjoy 'People' art exhibit
+(compound: 0.7579)
+(neg: 0.0)
+(neu: 0.649)
+(pos: 0.351)
+Join 15 swim teams already registered for Abilities United Aquathon!  You'll have a fun, energetic day & do good! http://buff.ly/2bnYmTl 
+(compound: 0.9401)
+(neg: 0.0)
+(neu: 0.418)
+(pos: 0.582)
+#ThankfulThursday shout out to #KaiserPermanente, our $2,500 Bronze Sponsor of the  Abilities United Aquathon 2016!  http://buff.ly/2bMbtCT 
+(compound: 0.6239)
+(neg: 0.0)
+(neu: 0.733)
+(pos: 0.267)
+'Forget the gold medal: Why these runners are true Olympic champions' http://buff.ly/2blnZ7p   Spirit of #Aquathon! http://buff.ly/2blohv3 
+(compound: 0.8553)
+(neg: 0.079)
+(neu: 0.455)
+(pos: 0.467)
+Making flower pots for 25th anniversary Authors Luncheon. Buy your ticket today; win one of these centerpieces! http://buff.ly/2boMaoR 
+(compound: 0.6239)
+(neg: 0.0)
+(neu: 0.806)
+(pos: 0.194)
+'Teaching CA students about the struggles & victories of people with disabilities'? Hear audio on #KALW radio
+(compound: -0.3612)
+(neg: 0.143)
+(neu: 0.857)
+(pos: 0.0)
+Checked out out new Cover photo! #AbilitiesUnited #Support #CheckitOut
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Thank you to everyone at the #SerenoGroup for selecting Abilities United as the beneficiary of 1% for Good program!
+(compound: 0.9117)
+(neg: 0.0)
+(neu: 0.507)
+(pos: 0.493)
+We're proud & thankful #DeMattei Construction, Inc http://buff.ly/2aXJHh3   returns as a 'silver' sponsor at #AbilitiesUnited #Aquathon!
+(compound: 0.7959)
+(neg: 0.0)
+(neu: 0.629)
+(pos: 0.371)
+Join Abilities United #Aquathon,  practice your crawl, breaststroke, butterfly, backstroke http://buff.ly/2b95o0k 
+(compound: 0.7184)
+(neg: 0.0)
+(neu: 0.533)
+(pos: 0.467)
+Artists Ian Douglas teaching an art session at the Children's Discovery Museum San Jose today, Aug. 14 11 am - 4 pm.
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+185 children (3 to 14 years old) learned  to swim at Abilities United Water Safety program  #HooverPool #RedwoodCity
+(compound: 0.765)
+(neg: 0.0)
+(neu: 0.664)
+(pos: 0.336)
+Abilities United #AuthorsLuncheon!  Authors #Mark Kurlansky, #FrancineProse, #DanSantat, #MariaSemple! Buy tix today http://buff.ly/2bnCCYu 
+(compound: 0.658)
+(neg: 0.0)
+(neu: 0.671)
+(pos: 0.329)
+Moving for Me motor development group for children who are not yet walking. $125 for 5 week series! Starts 8/31!
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Buying or selling a house? Benefit Abilities United; use #SerenoGroup of #PaloAlto realtors! http://buff.ly/2aOMoHy 
+(compound: 0.7959)
+(neg: 0.0)
+(neu: 0.553)
+(pos: 0.447)
+Abilities United  fiscal year ended June 30.  Read a summary of our service, fundraising and volunteer results.
+(compound: 0.5859)
+(neg: 0.0)
+(neu: 0.745)
+(pos: 0.255)
+Join Abilities United for BBQ, face painting, crafts fair, Wed, Aug 10, 10am - 4pm! 3864 Middlefield Rd in Palo Alto
+(compound: 0.8221)
+(neg: 0.0)
+(neu: 0.625)
+(pos: 0.375)
+Abilities United exhibit 'People' which showcases original works of #art by participants of our art program at #CDM.
+(compound: 0.7269)
+(neg: 0.0)
+(neu: 0.679)
+(pos: 0.321)
+Productive day today; three volunteers working on social media, database, & volunteers waiting to be interviewed! http://buff.ly/2b0V6O5 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+#WildBoy at the #DragonTheatre in #RedwoodCity is about a family trying to keep their son with #autism at home.
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Can't get to #Rio for #Olympics2016 swim race? You CAN make it to the Aquathon, Hoover Pool, Redwood City, Sept. 17. http://tinyurl.com/jg3z56w 
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+We're honored the #SerenoGroup of #PaloAlto  selected Abilities United to be the recipients of their '1% for Good'!
+(compound: 0.8356)
+(neg: 0.0)
+(neu: 0.628)
+(pos: 0.372)
+Thank you to the San Mateo couple who donated our new bike rack!  This keeps sidewalks clear & accessible!
+(compound: 0.6892)
+(neg: 0.0)
+(neu: 0.738)
+(pos: 0.262)
+How does your company do when considering these 6 Benchmarks of On-the-job Inclusion of people with disabilities?
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Thank you President Obama & Hillary Clinton for including people with disabilities in your DNC speeches!   Inclusion for all abilities!
+(compound: 0.6229)
+(neg: 0.0)
+(neu: 0.77)
+(pos: 0.23)
+Check out our new responsive, modern, easy to use NEW website! http://www.abilitiesunited.org/   Tell us what you think!
+(compound: 0.717)
+(neg: 0.0)
+(neu: 0.715)
+(pos: 0.285)
+Hillsborough, CA students made this page about their volunteer day at Abilities United to encourage volunteering! http://www.sharethejoy.org/abilities-united …
+(compound: 0.8122)
+(neg: 0.0)
+(neu: 0.641)
+(pos: 0.359)
+18 new emojis depict a range of abilities; people in wheelchairs, guide dogs, a variety of activities
+(compound: 0.25)
+(neg: 0.0)
+(neu: 0.875)
+(pos: 0.125)
+Abilities United flag remains at half staff for police killed in Dallas & now Baton Rouge.  We're united with all!
+(compound: 0.3382)
+(neg: 0.164)
+(neu: 0.548)
+(pos: 0.288)
+New movie,'Life, Animated'? Owen Suskind, who has autism, figure out how to navigate the world using Disney cartoons
+(compound: 0.0)
+(neg: 0.0)
+(neu: 1.0)
+(pos: 0.0)
+Abilities United in JCC story: Moon River & Me: Therapeutic Attributes of Water  http://www.livefullyblog.org/health-and-fitness/moon-river-and-me-the-therapeutic-attributes-of-water/ …
+(compound: 0.5859)
+(neg: 0.0)
+(neu: 0.714)
+(pos: 0.286)
+We join the world in mourning the loss of innocent citizens of the world.  Abilities United stands with France.
+(compound: 0.4939)
+(neg: 0.188)
+(neu: 0.471)
+(pos: 0.341)
+Once again Abilities United stands united with all USA citizens as well  as Dallas, TX to mourn our shared loss. RIP
+(compound: 0.8494)
+(neg: 0.153)
+(neu: 0.389)
+(pos: 0.459)
+Thanks to our board member, we attended the Women of Color conference on #Yahoo campus. http://www.abilitiesunited.org/What-we-do 
+(compound: 0.4404)
+(neg: 0.0)
+(neu: 0.838)
+(pos: 0.162)
+All of us at Abilities United wish everyone a very happy and festive Independence Day!  Original painting by John!
+(compound: 0.9489)
+(neg: 0.0)
+(neu: 0.405)
+(pos: 0.595)
+This is your final output.
+References
+http://www.nltk.org/api/nltk.sentiment.html
+http://www.nltk.org
